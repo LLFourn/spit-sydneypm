@@ -1,0 +1,270 @@
+# -*-coding: utf-8-*-
+#+TITLE: Spitting out shell with Perl 6
+#+EMAIL: lloyd.fourn@gmail.com
+#+AUTHOR: Lloyd Fournier
+
+* Spit
+
+Spook is a Perl 6 like language.
+
+Spook in the Shell (Spit-sh) is the compiler for this language.
+
+It isn't super useful yet. But it's getting pretty cool.
+
+#+BEGIN_SRC spit
+say "👻Hello SydneyPM👻!";
+#+END_SRC
+
+#+RESULTS:
+#+BEGIN_src shell
+BEGIN(){
+  exec 3>&1
+  say(){ printf '%s\n' "$1" >&3; }
+}
+MAIN(){ say '👻Hello SydneyPM👻!'; }
+BEGIN && MAIN
+#+END_src
+
+** Configuration Management Sucks
+
+(ssh + shell scripts) ⟹ CFEngine ⟹ Puppet ⟹ Chef ⟹ Salt/Ansible (+ Docker)
+
+
+*** CFEngine, Puppet and Chef
+
+State declaration
+
+1. You can not describe a series of state transitions
+2. They don't automate what you already do
+
+*** Ansible
+
+The right model.
+
+The wrong implementation.
+
+“Ansible is a radically simple IT automation platform that makes your
+applications and systems easier to deploy. Avoid writing scripts or
+custom code to deploy and update your applications— automate *in a
+language that approaches plain English*, using SSH, with no agents to
+install on remote systems.”
+
+**** Read a file contents into variable
+
+#+BEGIN_SRC yaml
+  vars:
+    user_data_file: "base-ami-userdata.sh"
+  - name: user_data_contents
+    shell: cat {{ user_data_file }}
+    register: user_data_action
+#+END_SRC
+
+#+BEGIN_SRC spit
+  my File $user-data-file = "base-ami-userdata.sh";
+  my $user-data-contents = $user-data-file.slurp;
+#+END_SRC
+
+**** Conditionals
+
+#+BEGIN_SRC yaml
+tasks:
+  - command: /bin/false
+    register: result
+    ignore_errors: True
+
+  - command: /bin/something
+    when: result|failed
+
+  - command: /bin/something_else
+    when: result|succeeded
+
+  - command: /bin/still/something_else
+    when: result|skipped
+#+END_SRC
+
+#+BEGIN_SRC spit
+  constant $*do-this-thing = True;
+  if $*do-this-thing {
+      if ${false} {
+          ${something_else}
+      } else {
+          ${something}
+      }
+  } else {
+     ${something_else}
+  }
+#+END_SRC
+
+**** Loops
+
+Yes. Loops.
+
+#+BEGIN_SRC yaml
+- name: add several users
+  user:
+    name: "{{ item }}"
+    state: present
+    groups: "wheel"
+  with_items:
+     - testuser1
+     - testuser2
+#+END_SRC
+
+#+BEGIN_SRC spit
+  # imagination
+  for User<testuser1 testuser2> {
+      .ensure-present(group => "wheel");
+  }
+#+END_SRC
+
+**** Nested Loops
+
+*Yes*, Nested loops.
+
+#+BEGIN_SRC yaml
+- name: give users access to multiple databases
+  mysql_user:
+    name: "{{ item[0] }}"
+    priv: "{{ item[1] }}.*:ALL"
+    append_privs: yes
+    password: "foo"
+  with_nested:
+    - [ 'alice', 'bob' ]
+    - [ 'clientdb', 'employeedb', 'providerdb' ]
+#+END_SRC
+
+#+BEGIN_SRC spit
+  # imagination
+  use MySQL;
+  for <alice bob> -> MySqlUser $user {
+      for <clientdb employeedb providerdb> -> $priv {
+          $user.ensure-exists;
+          $user.set-password("foo");
+          $user.set-priv("$priv.*:ALL" );
+      }
+  }
+#+END_SRC
+
+*** Docker
+
+The best one. Doesn't cover everything by the above.
+
+It has the right scope.
+The right model.
+and a decent implementation.
+
+It's just shell scripts + container magic.
+
+#+BEGIN_SRC dockerfile
+  FROM buildpack-deps:jessie-scm
+  MAINTAINER Rob Hoelz
+
+  RUN groupadd -r perl6 && useradd -r -g perl6 perl6
+
+  ENV rakudo_version=2017.01
+
+  RUN buildDeps=' \
+          gcc \
+          libc6-dev \
+          libencode-perl \
+          make \
+      ' \
+      && set -x \
+      && apt-get update \
+      && apt-get --yes install --no-install-recommends $buildDeps \
+      && rm -rf /var/lib/apt/lists/* \
+      && mkdir /root/rakudo \
+      && curl -fsSL http://rakudo.org/downloads/star/rakudo-star-${rakudo_version}.tar.gz -o rakudo.tar.gz \
+      && tar xzf rakudo.tar.gz --strip-components=1 -C /root/rakudo \
+      && ( \
+          cd /root/rakudo \
+          && perl Configure.pl --prefix=/usr --gen-moar \
+          && make install \
+      ) \
+      && rm -rf /rakudo.tar.gz /root/rakudo \
+      && apt-get purge -y --auto-remove $buildDeps
+
+  ENV PATH=$PATH:/usr/share/perl6/site/bin
+
+  CMD ["perl6"]
+#+END_SRC
+
+** Background
+
+I've been working on Shell script transpilers for a while. Since mid 2015 (I think?).
+
+My first one was called Caasper. (Configuration as a service)
+
+It was written in Perl 5.
+#+BEGIN_SRC perl
+
+  package Caasper::Object::File;
+  use Caasper::Object;
+
+  action remove => sub($self) {
+
+      desc "removing ".$self->fn;
+
+      on sh => sub { {
+          cmd => 'rm',
+          args => [$self->fn],
+      }};
+
+  };
+
+  attr owner => sub($self) {
+
+      on sh => (
+          requires => ['owner'],
+          does => sub ($p,$owner){
+              {
+                  cmd => $owner,
+                  newline => 0,
+                  args => [ $self->fn ],
+              }
+          }
+      );
+  };
+#+END_SRC
+*** used like
+#+BEGIN_SRC perl
+  If[ File['/etc/tmp.txt']~>owner ]->then(sub {
+     Notify[ File['/etc/tmp.txt']~>owner]->console
+  });
+#+END_SRC
+
+*** Then Ghost in the Shell Script
+
+I was too scared to write a real parser so I made a version in Perl 6
+by hacking the rakudo compiler parser from inside Perl 6 code.
+
+I produced a proper abstract syntax tree.
+
+It made me write a test suite.
+
+In some ways it is still more developed than Spit.
+
+*** But in other ways...
+
+It was weird.
+
+#+BEGIN_SRC perl6
+plan 2;
+sub today { DateTime.now(:!timezone).Date }
+
+is Sys~>date, today.Str,"~>date is the same as Date.today";
+ok Sys~>year == today.year,"~>year is the same as Date.today.year";
+#+END_SRC
+
+** Then Spook in the Shell Script
+Started it around May 2016.
+
+Parser, AST, compiler all written in Perl 6.
+
+#+BEGIN_SRC spit :os alpine
+  if File</etc/host> {
+      say .owner;
+  } else {
+      die "$_ doesn't exist";
+  }
+#+END_SRC
