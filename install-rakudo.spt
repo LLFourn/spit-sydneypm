@@ -1,0 +1,18 @@
+env $PATH;
+constant GitHubRepo $*rakudo-repo = "rakudo/rakudo";
+constant GitHubRepo $*zef-repo    = "ugexe/zef";
+
+${cd ($*rakudo-repo.clone) };
+${$*git checkout "e0e0800897296a0f44d474648513b2115455b7fc"};
+
+constant Cmd $perl6 = 'perl6';
+
+ok ${perl "Configure.pl" --gen-moar --gen-nqp}, 'ran Configure.pl';
+ok ${make install}, 'make install';
+
+$PATH ~= ":${pwd}/install/bin/rakudo";
+${export 'PATH'};
+
+${cd ".."};
+
+ok $perl6, 'perl6 command exists';

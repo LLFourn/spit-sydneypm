@@ -3,6 +3,12 @@
 #+EMAIL: lloyd.fourn@gmail.com
 #+AUTHOR: Lloyd Fournier
 
+#+BEGIN_SRC emacs-lisp :tangle yes
+(setq org-export-coding-system 'utf-8)
+(setq org-confirm-babel-evaluate nil)
+(load "~/docs/spit-sydneypm/ob-spit.el")
+#+END_SRC
+
 * Spit
 
 Spook is a Perl 6 like language.
@@ -12,23 +18,22 @@ Spook in the Shell (Spit-sh) is the compiler for this language.
 It isn't super useful yet. But it's getting pretty cool.
 
 #+BEGIN_SRC spit
-say "👻Hello SydneyPM👻!";
+  say "\c[GHOST]Hello SydneyPM\c[GHOST]!";
 #+END_SRC
 
 #+RESULTS:
 #+BEGIN_src shell
-BEGIN(){
-  exec 3>&1
-  say(){ printf '%s\n' "$1" >&3; }
-}
-MAIN(){ say '👻Hello SydneyPM👻!'; }
-BEGIN && MAIN
+  BEGIN(){
+    exec 3>&1
+    say(){ printf '%s\n' "$1" >&3; }
+  }
+  MAIN(){ say '👻Hello SydneyPM👻!'; }
+  BEGIN && MAIN
 #+END_src
 
 ** Configuration Management Sucks
 
-(ssh + shell scripts) ⟹ CFEngine ⟹ Puppet ⟹ Chef ⟹ Salt/Ansible (+ Docker)
-
+(ssh + shell scripts) ⟹ CFEngine ⟹ Puppet ⟹ Chef ⟹ Ansible ⟹ Docker
 
 *** CFEngine, Puppet and Chef
 
@@ -45,8 +50,8 @@ The wrong implementation.
 
 “Ansible is a radically simple IT automation platform that makes your
 applications and systems easier to deploy. Avoid writing scripts or
-custom code to deploy and update your applications— automate *in a
-language that approaches plain English*, using SSH, with no agents to
+custom code to deploy and update your applications— automate *in
+a language that approaches plain English*, using SSH, with no agents to
 install on remote systems.”
 
 **** Read a file contents into variable
@@ -64,6 +69,15 @@ install on remote systems.”
   my $user-data-contents = $user-data-file.slurp;
 #+END_SRC
 
+#+RESULTS:
+#+BEGIN_src shell
+  MAIN(){
+    user_data_file=base-ami-userdata.sh
+    user_data_contents="$(cat "$user_data_file")"
+  }
+  MAIN
+#+END_src
+
 **** Conditionals
 
 #+BEGIN_SRC yaml
@@ -71,6 +85,7 @@ tasks:
   - command: /bin/false
     register: result
     ignore_errors: True
+    when: do_this_thing
 
   - command: /bin/something
     when: result|failed
@@ -83,7 +98,7 @@ tasks:
 #+END_SRC
 
 #+BEGIN_SRC spit
-  constant $*do-this-thing = True;
+  constant $*do-this-thing = False;
   if $*do-this-thing {
       if ${false} {
           ${something_else}
@@ -94,6 +109,12 @@ tasks:
      ${something_else}
   }
 #+END_SRC
+
+#+RESULTS:
+#+BEGIN_src shell
+MAIN(){ something_else; }
+MAIN
+#+END_src
 
 **** Loops
 
@@ -147,15 +168,19 @@ Yes. Loops.
 
 *** Docker
 
-The best one. Doesn't cover everything by the above.
+The best one.
 
-It has the right scope.
+It has the right scope (specifying containers)
 The right model.
-and a decent implementation.
+A decent implementation.
 
-It's just shell scripts + container magic.
+But it can't do everything by itself
 
+**** Docker's configuration language
+
+Is just shell scripts
 #+BEGIN_SRC dockerfile
+  # TERRIBLE SHELL SCRIPTS
   FROM buildpack-deps:jessie-scm
   MAINTAINER Rob Hoelz
 
@@ -172,6 +197,7 @@ It's just shell scripts + container magic.
       && set -x \
       && apt-get update \
       && apt-get --yes install --no-install-recommends $buildDeps \
+
       && rm -rf /var/lib/apt/lists/* \
       && mkdir /root/rakudo \
       && curl -fsSL http://rakudo.org/downloads/star/rakudo-star-${rakudo_version}.tar.gz -o rakudo.tar.gz \
@@ -187,6 +213,21 @@ It's just shell scripts + container magic.
   ENV PATH=$PATH:/usr/share/perl6/site/bin
 
   CMD ["perl6"]
+#+END_SRC
+
+*** Conclusion
+
+(ssh + shell scripts) ⟹ CFEngine  ⟹  Puppet ⟹ Chef ⤸
+         ⇓            Docker  ⟸ Salt/Ansible ⟸
+( ssh +
+ terrible shell scripts +
+ containers)
+
+#+BEGIN_SRC hope
+🢫🢫🢫 Spook in the Shel
+shell scripts compiled from Perl 6 +
+ssh (or curl or whatever you like) +
+containers
 #+END_SRC
 
 ** Background
@@ -244,7 +285,7 @@ It made me write a test suite.
 
 In some ways it is still more developed than Spit.
 
-*** But in other ways...
+*** But in other ways
 
 It was weird.
 
@@ -261,10 +302,308 @@ Started it around May 2016.
 
 Parser, AST, compiler all written in Perl 6.
 
-#+BEGIN_SRC spit :os alpine
-  if File</etc/host> {
+#+BEGIN_SRC spit
+  if File</etc/hosts> {
       say .owner;
-  } else {
-      die "$_ doesn't exist";
   }
+#+END_SRC
+
+#+RESULTS:
+#+BEGIN_src shell
+BEGIN(){
+  exec 3>&1
+  say(){ printf '%s\n' "$1" >&3; }
+}
+MAIN(){ test -e /etc/hosts && say "$(stat -c %U /etc/hosts)"; }
+BEGIN && MAIN
+#+END_src
+
+*** Lines of code
+#+BEGIN_SRC spit :run
+  given File("$*HOME/src/spitsh/lib") {
+      my $loc = 0;
+
+      for .find(name => /\.pm6$/) {
+          $loc += .lines;
+          say "{.lines} $_";
+      }
+      say "TOTAL $loc";
+  }
+#+END_SRC
+
+#+RESULTS:
+#+BEGIN_src shell
+154 /home/llfourn/src/spitsh/lib/Spit/Metamodel.pm6
+74 /home/llfourn/src/spitsh/lib/Spit/Compile.pm6
+1668 /home/llfourn/src/spitsh/lib/Spit/SAST.pm6
+53 /home/llfourn/src/spitsh/lib/Spit/Repo.pm6
+52 /home/llfourn/src/spitsh/lib/Spit/OptsParser.pm6
+99 /home/llfourn/src/spitsh/lib/Spit/DependencyList.pm6
+639 /home/llfourn/src/spitsh/lib/Spit/Sh/Composer.pm6
+884 /home/llfourn/src/spitsh/lib/Spit/Sh/Compiler.pm6
+100 /home/llfourn/src/spitsh/lib/Spit/Sh/ShellElement.pm6
+53 /home/llfourn/src/spitsh/lib/Spit/Util.pm6
+137 /home/llfourn/src/spitsh/lib/Spit/Doc/Markdown.pm6
+27 /home/llfourn/src/spitsh/lib/Spit/SpitDoc.pm6
+66 /home/llfourn/src/spitsh/lib/Spit/PRECOMP.pm6
+125 /home/llfourn/src/spitsh/lib/Spit/Parser/Quote.pm6
+296 /home/llfourn/src/spitsh/lib/Spit/Parser/Regex.pm6
+681 /home/llfourn/src/spitsh/lib/Spit/Parser/Grammar.pm6
+880 /home/llfourn/src/spitsh/lib/Spit/Parser/Actions.pm6
+51 /home/llfourn/src/spitsh/lib/Spit/Parser/Lang.pm6
+37 /home/llfourn/src/spitsh/lib/Spit/Constants.pm6
+387 /home/llfourn/src/spitsh/lib/Spit/Exceptions.pm6
+TOTAL 6463
+#+END_src
+
+*** Spec tests
+
+#+BEGIN_SRC spit
+  given File("$*HOME/src/spitsh/spec") {
+      my $n-tests = 0;
+      my @files;
+
+      for .find(name => /\.t$/) {
+          .slurp ~~ /plan (\d+)/;
+          $n-tests += @/[1]-->Int;
+          @files.push("@/[1] $_");
+      }
+
+      say @files.numeric-sort;
+      say "TOTAL: $n-tests";
+  }
+#+END_SRC
+
+#+RESULTS:
+#+BEGIN_src shell
+BEGIN(){
+  list(){ printf "%s\n" "$*"; }
+  e(){ printf %s "$1"; }
+  IFS='
+'
+  f_find(){ find "$1" $(test "$name" && list -name "$name"); }
+  M=''
+  subst(){
+    e "$1"|
+    T="$2" R="$3" awk -v "g=$g" '
+        BEGIN { RS="^$"; r=ENVIRON["R"]; t=ENVIRON["T"] }
+        {
+          while( (g || !i) && (i = index($0,t)) )
+          $0 = substr($0,1,i-1) r substr($0,i + length(t));
+          print;
+        }'
+  }
+  matches(){
+    RE_1="$(subst "$2" \# '\#')"
+    e "$1"|sed -nr "H;1h;\$!d;x;\#$RE_1#!q1"
+  }
+  exec 4>/dev/null
+  match(){
+    M=''
+    if matches "$1" "$2"; then
+      RE="$(subst "$2" \# '\#')"
+      M="$(i=0; while e "$1"|sed -nr "H;1h;\$!d;x;s#$RE#👻\\$i\n🐚#;s/.*👻|🐚.*//gp" 2>&4; do
+        : $((i+=1))
+      done)"
+    else
+      false
+    fi
+  }
+  at_pos(){ e "$1"|sed -n "$(($2+1))p"|tr -d '\n'; }
+  push(){ e "$1"|awk -v "item=$2" '{ print } END { print item }'; }
+  exec 3>&1
+  say(){ printf '%s\n' "$1" >&3; }
+
+}
+MAIN(){
+  _1="$HOME/src/spitsh/spec"; {
+    n_tests=0
+    files=''
+    for _2 in $(name='*.t' f_find "$_1"); do
+      match "$(cat "$_2")" 'plan ([0-9]+)'
+      n_tests=$((n_tests+$(at_pos "$M" 1)))
+      files=$(push "$files" "$(at_pos "$M" 1) $_2")
+    done
+    say "$(e "$files"|sort -n)"
+    say "TOTAL: $n_tests"
+  }
+}
+BEGIN && MAIN
+#+END_src
+
+#+RESULTS:
+|      1 | /home/llfourn/src/spitsh/spec/base/pattern.t             |
+|      1 | /home/llfourn/src/spitsh/spec/base/syntax.t              |
+|      2 | /home/llfourn/src/spitsh/spec/base/concat.t              |
+|      2 | /home/llfourn/src/spitsh/spec/base/int.t                 |
+|      2 | /home/llfourn/src/spitsh/spec/base/is-impure.t           |
+|      2 | /home/llfourn/src/spitsh/spec/base/sanity.t              |
+|      3 | /home/llfourn/src/spitsh/spec/base/method-rw.t           |
+|      3 | /home/llfourn/src/spitsh/spec/base/on-block.t            |
+|      3 | /home/llfourn/src/spitsh/spec/base/opts.t                |
+|      3 | /home/llfourn/src/spitsh/spec/packages/git.t             |
+|      4 | /home/llfourn/src/spitsh/spec/base/docs.t                |
+|      4 | /home/llfourn/src/spitsh/spec/base/git.t                 |
+|      4 | /home/llfourn/src/spitsh/spec/packages/curl.t            |
+|      5 | /home/llfourn/src/spitsh/spec/base/constant.t            |
+|      6 | /home/llfourn/src/spitsh/spec/base/export.t              |
+|      6 | /home/llfourn/src/spitsh/spec/base/PID.t                 |
+|     10 | /home/llfourn/src/spitsh/spec/base/scalar-assignment.t   |
+|     15 | /home/llfourn/src/spitsh/spec/base/class.t               |
+|     16 | /home/llfourn/src/spitsh/spec/base/FD.t                  |
+|     17 | /home/llfourn/src/spitsh/spec/base/ternary.t             |
+|     19 | /home/llfourn/src/spitsh/spec/base/enum-class.t          |
+|     19 | /home/llfourn/src/spitsh/spec/base/parameterized-class.t |
+|     20 | /home/llfourn/src/spitsh/spec/base/given-when.t          |
+|     24 | /home/llfourn/src/spitsh/spec/base/quote.t               |
+|     24 | /home/llfourn/src/spitsh/spec/base/while.t               |
+|     25 | /home/llfourn/src/spitsh/spec/base/cmd.t                 |
+|     29 | /home/llfourn/src/spitsh/spec/base/file.t                |
+|     30 | /home/llfourn/src/spitsh/spec/base/int-expr.t            |
+|     31 | /home/llfourn/src/spitsh/spec/base/sub.t                 |
+|     35 | /home/llfourn/src/spitsh/spec/base/str.t                 |
+|     36 | /home/llfourn/src/spitsh/spec/base/for.t                 |
+|     37 | /home/llfourn/src/spitsh/spec/base/regex.t               |
+|     41 | /home/llfourn/src/spitsh/spec/base/list.t                |
+|     46 | /home/llfourn/src/spitsh/spec/base/if.t                  |
+|    138 | /home/llfourn/src/spitsh/spec/base/junctions.t           |
+| TOTAL: | 663                                                      |
+
+*** Nice error messages
+
+spit eval 'say "hell world'
+
+spit eval 'say "hello world" say "the world is yours"'
+
+spit eval 'if True { say "hello world" '
+
+spit eval 'sub foo($a,$b) { }; foo("one")'
+
+spit eval 'sub foo($a,$b) { }; foo("one", "two", "three");'
+*** Clever Regex parsing
+#+BEGIN_SRC spit
+  my $foo = "foo";
+  say (given $foo {
+      when "food" { "literally food" }
+      when /foo$/ { "ends with foo"  }
+      when /^fo/  { "starts with fo" }
+      when /f{2,3}/ { "crazy" }
+  })
+#+END_SRC
+
+#+RESULTS:
+#+BEGIN_src shell
+BEGIN(){
+  e(){ printf %s "$1"; }
+  M=''
+  subst(){
+    e "$1"|
+    T="$2" R="$3" awk -v "g=$g" '
+        BEGIN { RS="^$"; r=ENVIRON["R"]; t=ENVIRON["T"] }
+        {
+          while( (g || !i) && (i = index($0,t)) )
+          $0 = substr($0,1,i-1) r substr($0,i + length(t));
+          print;
+        }'
+  }
+  matches(){
+    RE_1="$(subst "$2" \# '\#')"
+    e "$1"|sed -nr "H;1h;\$!d;x;\#$RE_1#!q1"
+  }
+  exec 4>/dev/null
+  match(){
+    M=''
+    if matches "$1" "$2"; then
+      RE="$(subst "$2" \# '\#')"
+      M="$(i=0; while e "$1"|sed -nr "H;1h;\$!d;x;s#$RE#👻\\$i\n🐚#;s/.*👻|🐚.*//gp" 2>&4; do
+        : $((i+=1))
+      done)"
+    else
+      false
+    fi
+  }
+  exec 3>&1
+  say(){ printf '%s\n' "$1" >&3; }
+}
+MAIN(){
+  foo=foo
+  say "$(if [ "$foo" = food ]; then
+    e 'literally food'
+  elif match "$foo" 'foo$'; then
+    e 'ends with foo'
+  elif match "$foo" ^fo; then
+    e 'starts with fo'
+  elif match "$foo" 'f{2,3}'; then
+    e crazy
+  fi)"
+}
+BEGIN && MAIN
+#+END_src
+
+In action.
+
+#+BEGIN_SRC spit
+  if prompt("ask user a question") {
+      say "they said yes";
+  } else {
+      say "hey said no";
+  }
+#+END_SRC
+
+*** Options
+Are declared like $*foo;
+
+#+BEGIN_SRC spit
+  #| my config option
+  constant $*config = "foo";
+
+  given $*config {
+      when 'foo' { say "running in foo mode" }
+      when 'bar' { say "running in bar mode" }
+  }
+#+END_SRC
+
+Operating system is just on option (kinda)
+[[https://github.com/spitsh/spitsh/blob/master/resources/src/os.spt]]
+
+*** Documentation
+
+#+BEGIN_SRC spit :run
+  #| my config option
+  constant $*config = "foo";
+
+  say $*config.WHY;
+#  say @/.WHY
+#+END_SRC
+
+#+RESULTS:
+#+BEGIN_src shell
+my config option
+#+END_src
+
+https://github.com/spitsh/spitsh/blob/master/resources/src/Str.spt
+[[https://github.com/spitsh/spitsh/blob/master/doc/classes/Str.md]]
+** Install
+
+#+BEGIN_SRC spit
+  env $PATH;
+  constant GitHubRepo $*rakudo-repo = "rakudo/rakudo";
+  constant GitHubRepo $*zef-repo    = "ugexe/zef";
+
+
+
+  ${cd ($*rakudo-repo.clone) };
+  ${$*git checkout "e0e0800897296a0f44d474648513b2115455b7fc"};
+
+  constant Cmd $perl6 = 'perl6';
+
+  ok ${perl "Configure.pl" --gen-moar --gen-nqp}, 'ran Configure.pl';
+  ok ${make install}, 'make install';
+
+  $PATH ~= ":${pwd}/install/bin/rakudo";
+  ${export 'PATH'};
+
+  ${cd ".."};
+
+  ok $perl6, 'perl6 command exists';
 #+END_SRC
